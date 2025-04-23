@@ -185,27 +185,35 @@ class MyDataset(Dataset):
               default=os.getcwd(),
               show_default=False,
               help="Directory where save DeepTumour results. Default is the current directory")
-def DeepTumour(vcfFile, vcfDir, refGenome, hg38, keep_input, outDir):
-    
+def DeepTumour(
+    vcfFile: str | None,
+    vcfDir: str | None,
+    refGenome: str,
+    hg38: bool,
+    keep_input: bool,
+    outDir: str,
+):
+
     """
     Predict cancer type from a VCF file using DeepTumour
     """
 
     # Generate the DeepTumour input file from the VCFs
+    input:pd.DataFrame
     if vcfFile and not vcfDir:
-        input:pd.DataFrame = vcf2input(vcfFile, refGenome, hg38)
+        input = vcf2input(vcfFile, refGenome, hg38)
     elif vcfDir and not vcfFile:
-        input:pd.DataFrame = pd.DataFrame()
+        input = pd.DataFrame()
         vcf_files:list = [file for file in os.listdir(vcfDir) if file.endswith('.vcf')]
         for file in tqdm(vcf_files, desc="Processing VCF files"):
             input = pd.concat([input, vcf2input(os.path.join(vcfDir, file), refGenome, hg38)])
     else:
         raise ValueError('Please provide either a VCF file or a directory with VCF files')
-    
+
     # Save the input file used by DeepTumour
     if keep_input:
         input.to_csv(os.path.join(outDir, 'DeepTumour_preprocess_input.csv'), index=False)
-    
+
     # Load the model
     complete_ensemble = torch.load('/DeepTumour/trained_models/complete_ensemble.pt', map_location=torch.device("cpu"))
     cancer_label:pd.Series = pd.Series(["Biliary-AdenoCA","Bladder-TCC","Bone-Leiomyo","Bone-Osteosarc","Breast-AdenoCA","CNS-GBM","CNS-Medullo","CNS-Oligo","CNS-PiloAstro","Cervix-SCC","ColoRect-AdenoCA","Eso-AdenoCA","Head-SCC","Kidney-ChRCC","Kidney-RCC","Liver-HCC","Lung-AdenoCA","Lung-SCC","Lymph-BNHL","Lymph-CLL","Myeloid-MPN","Ovary-AdenoCA","Panc-AdenoCA","Panc-Endocrine","Prost-AdenoCA","Skin-Melanoma","Stomach-AdenoCA","Thy-AdenoCA","Uterus-AdenoCA"])
@@ -213,14 +221,14 @@ def DeepTumour(vcfFile, vcfDir, refGenome, hg38, keep_input, outDir):
     # Separate labels and matrices
     labels:pd.Series = input['index']
     input.drop('index', axis=1, inplace=True)
-    matrix:torch.tensor = torch.from_numpy(input.to_numpy()).float()
+    matrix:torch.Tensor = torch.from_numpy(input.to_numpy()).float()
 
     # Make predictions
     with torch.no_grad():
         probs = complete_ensemble.predict_proba(matrix)
         prediction = complete_ensemble.predict(matrix)
         entropy = complete_ensemble.get_entropy(matrix)
-    
+
     # Extract the results
     result:dict = {}
     for i, label in enumerate(labels):

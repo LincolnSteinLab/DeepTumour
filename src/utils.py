@@ -2,11 +2,11 @@ import os
 import re
 import pickle
 import pandas as pd
-import allel
+import allel  # type: ignore[import-untyped]
 import math
-from Bio.Seq import reverse_complement
-from liftover import ChainFile
-from pyfaidx import Fasta
+from Bio.Seq import reverse_complement  # type: ignore[import-untyped]
+from liftover import ChainFile  # type: ignore[import-untyped]
+from pyfaidx import Fasta  # type: ignore[import-untyped]
 
 def hg38tohg19(vcf:pd.DataFrame) -> pd.DataFrame:
 
@@ -20,10 +20,10 @@ def hg38tohg19(vcf:pd.DataFrame) -> pd.DataFrame:
         pos:int = int(row['POS'])
         try:
             liftOver_result:tuple = converter[chrom][pos][0]
-            vcf.loc[i, 'CHROM'] = liftOver_result[0]
-            vcf.loc[i, 'POS'] = liftOver_result[1]
+            vcf.at[i, 'CHROM'] = liftOver_result[0]
+            vcf.at[i, 'POS'] = liftOver_result[1]
         except IndexError:
-            vcf.loc[i, 'CHROM'] = 'Remove'
+            vcf.at[i, 'CHROM'] = 'Remove'
 
     return(vcf)
 
@@ -32,7 +32,7 @@ def process_dnp(vcf:pd.DataFrame) -> pd.DataFrame:
     """
     Split DNPs into two different SNPs
     """
-    
+
     # Select DNPs positions
     dnps = vcf[(vcf['REF'].str.len() == 2) & (vcf['ALT'].str.len() == 2)]
 
@@ -58,7 +58,7 @@ def process_tnp(vcf:pd.DataFrame) -> pd.DataFrame:
     """
     Split TNPs into three different SNPs
     """
-    
+
     # Select TNPs positions
     tnps = vcf[(vcf['REF'].str.len() == 3) & (vcf['ALT'].str.len() == 3)]
 
@@ -73,7 +73,7 @@ def process_tnp(vcf:pd.DataFrame) -> pd.DataFrame:
     tnps_dup_third = tnps.copy()
     tnps_dup_third['REF'] = tnps_dup_third['REF'].str[2]
     tnps_dup_third['ALT'] = tnps_dup_third['ALT'].str[2]
-    tnps_dup_third['POS'] = tnps_dup_third['POS'] + 2 
+    tnps_dup_third['POS'] = tnps_dup_third['POS'] + 2
     tnps_dup_third['is_snp'] = True
 
     # Modify the original TNPs to create the first SNP
@@ -86,26 +86,27 @@ def process_tnp(vcf:pd.DataFrame) -> pd.DataFrame:
 
     return(new_vcf.reset_index(drop=True))
 
-def vcf2df(vcf:os.path, prefix:bool, liftOver:bool) -> pd.DataFrame:
-    
+def vcf2df(vcf_path:str, prefix:bool, liftOver:bool) -> pd.DataFrame:
+
     """
     Filter SNVs in chr1-chr22 from VCF file and return a dataframe
     """
 
     # Open VCF
-    vcf:pd.DataFrame = allel.vcf_to_dataframe(vcf, fields='*', alt_number=1)
+    vcf:pd.DataFrame = allel.vcf_to_dataframe(vcf_path, fields='*', alt_number=1)
     vcf.drop_duplicates(inplace=True)
     vcf.reset_index(drop=True, inplace=True)
 
     # LiftOver coordinates if the original VCF is in hg38
     if liftOver:
         vcf = hg38tohg19(vcf)
-    
+
     # Select chromosomes
+    chr_list: list
     if prefix:
-        chr_list:list = [f"chr{str(chrom)}" for chrom in range(1, 23)]
+        chr_list = [f"chr{str(chrom)}" for chrom in range(1, 23)]
     else:
-        chr_list:list = [str(chrom) for chrom in range(1, 23)]
+        chr_list = [str(chrom) for chrom in range(1, 23)]
 
     # Update chromosome names
     if prefix and not (vcf['CHROM'][0].startswith('chr')):
@@ -129,7 +130,7 @@ def df2bins(df:pd.DataFrame, sample_name:str, prefix:bool) -> pd.DataFrame:
     """
     Convert the dataframe to bin counts
     """
-    
+
     # Load the header of the bins
     header_bins:pd.DataFrame = pd.read_csv('/DeepTumour/trained_models/hg19.1Mb.header.gz', compression='gzip', header=None)
 
@@ -140,7 +141,7 @@ def df2bins(df:pd.DataFrame, sample_name:str, prefix:bool) -> pd.DataFrame:
     # Get bins from the df
     df_bins:pd.Series = df.CHROM + '.' + df.POS.apply(lambda x: int(math.floor(float(x) / 1000000))).astype(str)
     bins:pd.DataFrame = pd.DataFrame({'bins': pd.Series(pd.Categorical(df_bins, categories=header_bins.iloc[:, 0]))})
-    
+
     # Group bins and count
     bins = bins.groupby('bins').size().reset_index(name=sample_name)
 
@@ -208,7 +209,7 @@ def df2mut(df:pd.DataFrame, sample_name:str, fasta:Fasta) -> pd.DataFrame:
 
     return(mutations)
 
-def vcf2input(vcf:os.path, refGenome:os.path, liftOver:bool) -> pd.DataFrame:
+def vcf2input(vcf:str, refGenome:str, liftOver:bool) -> pd.DataFrame:
 
     """
     Process the VCF to get the input necessary for DeepTumour
@@ -234,5 +235,5 @@ def vcf2input(vcf:os.path, refGenome:os.path, liftOver:bool) -> pd.DataFrame:
     input:pd.DataFrame = pd.concat([bins, mutations]).set_index('bins')
     input = input.transpose()
     input.reset_index(drop=False, inplace=True)
-    
+
     return(input)

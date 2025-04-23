@@ -12,7 +12,7 @@ import pandas as pd
               type=click.STRING,
               default="z-norm",
               help="Name to save the z-norm parameters")
-def znorm_params(matrix, output):
+def znorm_params(matrix: str, output: str):
     """
     Function to save the z-norm parameters to use during DeepTumour preprocessing step
     """
@@ -29,7 +29,7 @@ def znorm_params(matrix, output):
         col_mean = dt_matrix[col].mean()
         col_std = dt_matrix[col].std()
         znorm_dict[col] = {'mean': col_mean, 'std': col_std}
-    
+
     # Save the params_dict to a pickle file
     with open(f'{output}.pkl', 'wb') as f:
         pickle.dump(znorm_dict, f)
