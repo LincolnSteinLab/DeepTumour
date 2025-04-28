@@ -1,17 +1,20 @@
 #!/usr/local/bin/python3
 
 import os
-import sys
 import click
 import json
 import numpy as np
 import pandas as pd
+from pathlib import Path
+from typing import Optional
 from utils import vcf2input
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from tqdm import tqdm
+
+MODEL_PATH = Path(__file__).parent / "trained_models" / "complete_ensemble.pt"
 
 class MLP(torch.nn.Module):
     def __init__(self, num_fc_layers, num_fc_units, dropout_rate):
@@ -185,13 +188,18 @@ class MyDataset(Dataset):
               default=os.getcwd(),
               show_default=False,
               help="Directory where save DeepTumour results. Default is the current directory")
+@click.option("--stdout", "stdout",
+              is_flag=True,
+              required = False,
+              help="Use this tag to print the results to stdout instead of saving them to a file")
 def DeepTumour(
-    vcfFile: str | None,
-    vcfDir: str | None,
+    vcfFile: Optional[str],
+    vcfDir: Optional[str],
     refGenome: str,
     hg38: bool,
     keep_input: bool,
     outDir: str,
+    stdout: bool,
 ):
 
     """
@@ -215,7 +223,7 @@ def DeepTumour(
         input.to_csv(os.path.join(outDir, 'DeepTumour_preprocess_input.csv'), index=False)
 
     # Load the model
-    complete_ensemble = torch.load('/DeepTumour/trained_models/complete_ensemble.pt', map_location=torch.device("cpu"))
+    complete_ensemble = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
     cancer_label:pd.Series = pd.Series(["Biliary-AdenoCA","Bladder-TCC","Bone-Leiomyo","Bone-Osteosarc","Breast-AdenoCA","CNS-GBM","CNS-Medullo","CNS-Oligo","CNS-PiloAstro","Cervix-SCC","ColoRect-AdenoCA","Eso-AdenoCA","Head-SCC","Kidney-ChRCC","Kidney-RCC","Liver-HCC","Lung-AdenoCA","Lung-SCC","Lymph-BNHL","Lymph-CLL","Myeloid-MPN","Ovary-AdenoCA","Panc-AdenoCA","Panc-Endocrine","Prost-AdenoCA","Skin-Melanoma","Stomach-AdenoCA","Thy-AdenoCA","Uterus-AdenoCA"])
 
     # Separate labels and matrices
@@ -241,9 +249,13 @@ def DeepTumour(
             'entropy': float(entropy[i])
         }
 
-    # Save the results
-    with open(os.path.join(outDir, 'predictions_DeepTumour.json'), 'w') as file:
-        json.dump(result, file, indent=4, sort_keys=True)
+    if stdout:
+        # Print the results to stdout
+        print(json.dumps(result, indent=4, sort_keys=True))
+    else:
+        # Save the results
+        with open(os.path.join(outDir, 'predictions_DeepTumour.json'), 'w') as file:
+            json.dump(result, file, indent=4, sort_keys=True)
 
 if __name__ == '__main__':
     DeepTumour()

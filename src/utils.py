@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import re
 import pickle
 import pandas as pd
@@ -8,13 +9,16 @@ from Bio.Seq import reverse_complement  # type: ignore[import-untyped]
 from liftover import ChainFile  # type: ignore[import-untyped]
 from pyfaidx import Fasta  # type: ignore[import-untyped]
 
+REPO_ROOT = Path(__file__).parent.parent
+MODEL_DIR = REPO_ROOT / 'src' / 'trained_models'
+
 def hg38tohg19(vcf:pd.DataFrame) -> pd.DataFrame:
 
     """
     Convert hg38 coordinates to hg19
     """
 
-    converter = ChainFile('/.liftover/hg38ToHg19.over.chain.gz')
+    converter = ChainFile(REPO_ROOT / 'requirements/hg38ToHg19.over.chain.gz')
     for i,row in vcf.iterrows():
         chrom:str = str(row['CHROM'])
         pos:int = int(row['POS'])
@@ -132,7 +136,7 @@ def df2bins(df:pd.DataFrame, sample_name:str, prefix:bool) -> pd.DataFrame:
     """
 
     # Load the header of the bins
-    header_bins:pd.DataFrame = pd.read_csv('/DeepTumour/trained_models/hg19.1Mb.header.gz', compression='gzip', header=None)
+    header_bins:pd.DataFrame = pd.read_csv(MODEL_DIR / 'hg19.1Mb.header.gz', compression='gzip', header=None)
 
     # Update chromosome names
     if not prefix:
@@ -154,10 +158,10 @@ def df2mut(df:pd.DataFrame, sample_name:str, fasta:Fasta) -> pd.DataFrame:
     """
 
     # Load the header of the mutation types
-    header_muts:pd.DataFrame = pd.read_csv('/DeepTumour/trained_models/Mut-Type-Header.csv')
+    header_muts:pd.DataFrame = pd.read_csv(MODEL_DIR / 'Mut-Type-Header.csv')
 
     # Load Z-Norm parameters
-    with open("/DeepTumour/trained_models/z-norm.pkl", "rb") as f:
+    with open(MODEL_DIR / "z-norm.pkl", "rb") as f:
         z_norm:dict = pickle.load(f)
 
     # Extract the mutation types
