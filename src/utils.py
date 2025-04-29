@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import re
 import pickle
+import sys
 import pandas as pd
 import allel  # type: ignore[import-untyped]
 import math
@@ -175,10 +176,13 @@ def df2mut(df:pd.DataFrame, sample_name:str, fasta:Fasta) -> pd.DataFrame:
 
         # Check that we have the same reference bases
         if (ref != ref_ctx[1]):
-            print('-----------------------------------')
-            print("WARNING: Reference base from VCF file doesn't match with records on the provided reference genome")
-            print(f'{chrom}:{pos} -- VCF: {ref} vs Reference genome: {ref_ctx[1]} -- Reference context: {ref_ctx}')
-            print('-----------------------------------')
+            print(
+                '-----------------------------------\n'
+                "WARNING: Reference base from VCF file doesn't match with records on the provided reference genome\n"
+                f'{chrom}:{pos} -- VCF: {ref} vs Reference genome: {ref_ctx[1]} -- Reference context: {ref_ctx}\n'
+                '-----------------------------------',
+                file=sys.stderr
+            )
             continue
 
         # Get the reverse complement if necessary
