@@ -8,16 +8,15 @@ RUN groupadd -r deeptumour && \
     useradd -r -g deeptumour deeptumour
 
 ENV HOME="/home/deeptumour"
-ENV PATH="$HOME/src:$HOME/.local/bin:$PATH"
-
-USER deeptumour
+ENV PATH="$HOME/src:$PATH"
 
 # Copy requirements & pip install
-COPY --chown=deeptumour requirements $HOME/requirements
+COPY --chmod=444 requirements $HOME/requirements
 RUN pip install --no-cache-dir -r $HOME/requirements/requirements.txt
 
 # Copy DeepTumour code & model
-COPY --chown=deeptumour src $HOME/src
+COPY --chmod=777 src $HOME/src
 
+USER deeptumour
 WORKDIR /WORKDIR
 ENTRYPOINT [ "DeepTumour.py" ]
