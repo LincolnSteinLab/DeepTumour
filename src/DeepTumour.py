@@ -77,7 +77,6 @@ class EnsemblePredictor(nn.Module):
         probs_list = [F.softmax(logits, dim=0) for logits in logits_list]
         probs_tensor = torch.stack(probs_list, dim=0)
         probability = probs_tensor.detach().cpu().numpy()
-
         return probability
 
     def predict(self, x):
@@ -115,8 +114,9 @@ class CompleteEnsemble(nn.Module):
         return list_of_lists
 
     def get_entropy(self, x):
-        entropy = np.mean([model.per_set_entropy(x) for model in self.model_list], 0)
-
+        probs_list = [model.predict_proba(x) for model in self.model_list]
+        ensemble_probs = np.mean(probs_list, axis=0)
+        entropy = -np.sum(ensemble_probs * np.log(ensemble_probs + 1e-12), axis=1)
         return entropy
 
     def predict_proba(self, x):
