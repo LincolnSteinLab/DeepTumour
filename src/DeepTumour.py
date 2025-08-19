@@ -11,12 +11,13 @@ from utils import vcf2input
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset
+from torch import Tensor
+from torch.distributions import Categorical
 from tqdm import tqdm
 
 MODEL_PATH = Path(__file__).parent / "trained_models" / "complete_ensemble.pt"
 
-class MLP(torch.nn.Module):
+class MLP(nn.Module):
     def __init__(self, num_fc_layers, num_fc_units, dropout_rate):
         super().__init__()
 
@@ -28,13 +29,11 @@ class MLP(torch.nn.Module):
             self.layers.append(nn.Linear(num_fc_units, num_fc_units))
             self.layers.append(nn.ReLU(True))
             self.layers.append(nn.Dropout(p=dropout_rate))
-
         self.layers.append(nn.Linear(num_fc_units, 29))
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         for i in range(len(self.layers)):
             x = self.layers[i](x)
-
         return x
 
     def feature_list(self, x):
@@ -42,123 +41,85 @@ class MLP(torch.nn.Module):
         for i in range(len(self.layers)):
             x = self.layers[i](x)
             out_list.append(x)
-
         return out_list
 
     def intermediate_forward(self, x, layer_index):
         for i in range(layer_index):
             x = self.layers[i](x)
-
         return x
 
 class EnsembleClassifier(nn.Module):
-    def __init__(self, model_list):
+    def __init__(self, model_list: list[MLP]):
         super(EnsembleClassifier, self).__init__()
         self.model_list = model_list
 
-    def forward(self, x):
-        logit_list = []
+    def forward(self, x: Tensor):
+        logit_list: list[Tensor] = []
         for model in self.model_list:
             model.eval()
             logits = model(x)
             logit_list.append(logits)
-
         return logit_list
 
 class EnsemblePredictor(nn.Module):
     # This is the ensemble to construct when making predictions on PCAWG data.
     # Exmnple of how to construct it and use it is available in the main() function
-    def __init__(self, model):
+    def __init__(self, model: EnsembleClassifier):
         super(EnsemblePredictor, self).__init__()
         self.model = model
 
-    def predict_proba(self, x):
-        logits_list = self.model.forward(x)
+    def forward(self, x: Tensor):
+        logit_list: list[Tensor] = self.model(x)
+        return logit_list
+
+    def predict_proba(self, x: Tensor):
+        logits_list: list[Tensor] = self.model(x)
         probs_list = [F.softmax(logits, dim=0) for logits in logits_list]
         probs_tensor = torch.stack(probs_list, dim=0)
-        probability = probs_tensor.detach().cpu().numpy()
+        probability: np.ndarray = probs_tensor.detach().cpu().numpy()
         return probability
 
-    def predict(self, x):
+    def predict(self, x: Tensor):
         probs = self.predict_proba(x)
-        predictions = np.argmax(probs, axis=1)
-
+        predictions: np.ndarray = np.argmax(probs, axis=1)
         return predictions
 
-    def per_set_entropy(self, x):
-        logits_list = self.model.forward(x)
-        probs_list = [F.softmax(logits, dim=0) for logits in logits_list]
-        probs_tensor = torch.stack(probs_list, dim=0)
-
-        def entropy(prob_array, eps=1e-8):
-            return -np.sum(np.log(prob_array + eps) * prob_array, axis=1)
-
-        entropy_list = entropy(probs_tensor.detach().numpy())
-
-        return entropy_list
+    def per_set_entropy(self, x: Tensor):
+        logits_list: list[Tensor] = self.model(x)
+        entropy_list: list[Tensor] = [Categorical(logits=logits).entropy() for logits in logits_list]
+        entropy_numpy: np.ndarray = torch.stack(entropy_list, dim=0).detach().cpu().numpy()
+        return entropy_numpy
 
 class CompleteEnsemble(nn.Module):
     # Models in this case are of EnsemblePredictors
     # This is the ensemble to use when testing on non-PCAWG data
     # An example of how to construct it is in the main() function
-    def __init__(self, model_list):
+    def __init__(self, model_list: list[EnsemblePredictor]):
         super(CompleteEnsemble, self).__init__()
         self.model_list = model_list
 
-    def forward(self, x):
-        list_of_lists = []
+    def forward(self, x: Tensor):
+        list_of_lists: list[list[Tensor]] = []
         for model in self.model_list:
-            logits = model.forward(x)
-            list_of_lists.append(logits)
-
+            list_of_lists.append(model(x))
         return list_of_lists
 
-    def get_entropy(self, x):
-        probs_list = [model.predict_proba(x) for model in self.model_list]
-        ensemble_probs = np.mean(probs_list, axis=0)
-        entropy = -np.sum(ensemble_probs * np.log(ensemble_probs + 1e-12), axis=1)
+    def get_entropy(self, x: Tensor):
+        ensemble_probs = torch.from_numpy(self.predict_proba(x))
+        entropy: Tensor = Categorical(probs=ensemble_probs).entropy()
         return entropy
 
-    def predict_proba(self, x):
+    def predict_proba(self, x: Tensor):
         probs_list = [model.predict_proba(x) for model in self.model_list]
-        probs = np.mean(probs_list, 0)
-
+        probs: np.ndarray = np.mean(probs_list, 0)
         return probs
 
-    def predict(self, x):
+    def predict(self, x: Tensor):
         probs = self.predict_proba(x)
-        predictions = np.argmax(probs, axis=1)
+        predictions: np.ndarray = np.argmax(probs, axis=1)
 
         return predictions
 
-class EnsembleClassifierAvg(nn.Module):
-    def __init__(self, model_list):
-        super(EnsembleClassifierAvg, self).__init__()
-        self.model_list = model_list
-
-    def forward(self, x):
-        logit_list = []
-        for model in self.model_list:
-            model.eval()
-            logits = model(x)
-            logit_list.append(logits)
-        output = torch.mean(torch.stack(logit_list, 0), dim=0)
-
-        return output
-
-class MyDataset(Dataset):
-    def __init__(self, data, target):
-        self.data = torch.from_numpy(data).float()
-        self.target = torch.from_numpy(target).long()
-
-    def __getitem__(self, index):
-        x = self.data[index]
-        y = self.target[index]
-
-        return x, y
-
-    def __len__(self):
-        return len(self.data)
 
 @click.command(name="DeepTumour")
 @click.option("--vcfFile", "vcfFile",
@@ -207,12 +168,12 @@ def DeepTumour(
     """
 
     # Generate the DeepTumour input file from the VCFs
-    input:pd.DataFrame
+    input: pd.DataFrame
     if vcfFile and not vcfDir:
         input = vcf2input(vcfFile, refGenome, hg38)
     elif vcfDir and not vcfFile:
         input = pd.DataFrame()
-        vcf_files:list = [file for file in os.listdir(vcfDir) if file.endswith('.vcf')]
+        vcf_files: list = [file for file in os.listdir(vcfDir) if file.endswith('.vcf')]
         for file in tqdm(vcf_files, desc="Processing VCF files"):
             input = pd.concat([input, vcf2input(os.path.join(vcfDir, file), refGenome, hg38)])
     else:
@@ -223,13 +184,13 @@ def DeepTumour(
         input.to_csv(os.path.join(outDir, 'DeepTumour_preprocess_input.csv'), index=False)
 
     # Load the model
-    complete_ensemble = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
-    cancer_label:pd.Series = pd.Series(["Biliary-AdenoCA","Bladder-TCC","Bone-Leiomyo","Bone-Osteosarc","Breast-AdenoCA","CNS-GBM","CNS-Medullo","CNS-Oligo","CNS-PiloAstro","Cervix-SCC","ColoRect-AdenoCA","Eso-AdenoCA","Head-SCC","Kidney-ChRCC","Kidney-RCC","Liver-HCC","Lung-AdenoCA","Lung-SCC","Lymph-BNHL","Lymph-CLL","Myeloid-MPN","Ovary-AdenoCA","Panc-AdenoCA","Panc-Endocrine","Prost-AdenoCA","Skin-Melanoma","Stomach-AdenoCA","Thy-AdenoCA","Uterus-AdenoCA"])
+    complete_ensemble: CompleteEnsemble = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
+    cancer_label: pd.Series = pd.Series(["Biliary-AdenoCA","Bladder-TCC","Bone-Leiomyo","Bone-Osteosarc","Breast-AdenoCA","CNS-GBM","CNS-Medullo","CNS-Oligo","CNS-PiloAstro","Cervix-SCC","ColoRect-AdenoCA","Eso-AdenoCA","Head-SCC","Kidney-ChRCC","Kidney-RCC","Liver-HCC","Lung-AdenoCA","Lung-SCC","Lymph-BNHL","Lymph-CLL","Myeloid-MPN","Ovary-AdenoCA","Panc-AdenoCA","Panc-Endocrine","Prost-AdenoCA","Skin-Melanoma","Stomach-AdenoCA","Thy-AdenoCA","Uterus-AdenoCA"])
 
     # Separate labels and matrices
-    labels:pd.Series = input['index']
+    labels: pd.Series = input['index']
     input.drop('index', axis=1, inplace=True)
-    matrix:torch.Tensor = torch.from_numpy(input.to_numpy()).float()
+    matrix: Tensor = torch.from_numpy(input.to_numpy()).float()
 
     # Make predictions
     with torch.no_grad():
@@ -238,9 +199,9 @@ def DeepTumour(
         entropy = complete_ensemble.get_entropy(matrix)
 
     # Extract the results
-    result:dict = {}
+    result: dict = {}
     for i, label in enumerate(labels):
-        cancer_probs:dict = {}
+        cancer_probs: dict = {}
         for cancer, prob in zip(cancer_label, probs[i]):
             cancer_probs[cancer] = float(prob)
         result[label] = {
