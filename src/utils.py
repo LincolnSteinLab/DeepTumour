@@ -13,7 +13,7 @@ from pyfaidx import Fasta  # type: ignore[import-untyped]
 REPO_ROOT = Path(__file__).parent.parent
 MODEL_DIR = REPO_ROOT / 'src' / 'trained_models'
 
-def hg38tohg19(vcf:pd.DataFrame) -> pd.DataFrame:
+def hg38tohg19(vcf:pd.DataFrame, fasta:Fasta) -> pd.DataFrame:
 
     """
     Convert hg38 coordinates to hg19
@@ -23,12 +23,37 @@ def hg38tohg19(vcf:pd.DataFrame) -> pd.DataFrame:
     for i,row in vcf.iterrows():
         chrom:str = str(row['CHROM'])
         pos:int = int(row['POS'])
+        vcf_REF = row['REF']
+        vcf_ALT = row['ALT']
+        
         try:
-            liftOver_result:tuple = converter[chrom][pos][0]
-            vcf.at[i, 'CHROM'] = liftOver_result[0]
-            vcf.at[i, 'POS'] = liftOver_result[1]
+            lift_chr, lift_pos, lift_strand = converter[chrom][pos][0]
         except IndexError:
             vcf.at[i, 'CHROM'] = 'Remove'
+            continue
+
+        if lift_strand == '-':
+            vcf_REF = reverse_complement(vcf_REF)
+            vcf_ALT = reverse_complement(vcf_ALT)
+
+            # https://github.com/jeremymcrae/liftover/issues/1#issuecomment-676597537
+            lift_pos += 2
+
+        ref_context = fasta[lift_chr][lift_pos-2:lift_pos+1].seq.upper()
+
+        if (len(vcf_REF) == len(vcf_ALT) and vcf_REF != ref_context[1]):
+            print((
+                f'Liftover Warning: ref mismatch at hg38 {chrom}:{pos} -> hg19 {lift_chr}:{lift_pos} '
+                f'-- VCF REF: {vcf_REF} (ALT: {vcf_ALT}) vs Reference hg19: {ref_context[1]} '
+                f'-- Reference context: {ref_context}'
+            ), file=sys.stderr)
+            vcf.at[i, 'CHROM'] = 'Remove'
+            continue
+
+        vcf.at[i, 'CHROM'] = lift_chr
+        vcf.at[i, 'POS'] = lift_pos
+        vcf.at[i, 'REF'] = vcf_REF
+        vcf.at[i, 'ALT'] = vcf_ALT
 
     return(vcf)
 
@@ -91,7 +116,7 @@ def process_tnp(vcf:pd.DataFrame) -> pd.DataFrame:
 
     return(new_vcf.reset_index(drop=True))
 
-def vcf2df(vcf_path:str, prefix:bool, liftOver:bool) -> pd.DataFrame:
+def vcf2df(vcf_path:str, prefix:bool, liftOver:bool, fasta: Fasta) -> pd.DataFrame:
 
     """
     Filter SNVs in chr1-chr22 from VCF file and return a dataframe
@@ -104,7 +129,7 @@ def vcf2df(vcf_path:str, prefix:bool, liftOver:bool) -> pd.DataFrame:
 
     # LiftOver coordinates if the original VCF is in hg38
     if liftOver:
-        vcf = hg38tohg19(vcf)
+        vcf = hg38tohg19(vcf, fasta)
 
     # Select chromosomes
     chr_list: list
@@ -231,7 +256,7 @@ def vcf2input(vcf:str, refGenome:str, liftOver:bool) -> pd.DataFrame:
     prefix:bool = list(fasta.keys())[0].startswith('chr')
 
     # Load the VCF
-    df:pd.DataFrame = vcf2df(vcf, prefix, liftOver)
+    df:pd.DataFrame = vcf2df(vcf, prefix, liftOver, fasta)
 
     # Convert the dataframe to bin counts
     bins:pd.DataFrame = df2bins(df, sample_name, prefix)
