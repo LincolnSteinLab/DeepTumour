@@ -151,7 +151,7 @@ def vcf2df(vcf_path:str, prefix:bool, liftOver:bool, fasta: Fasta) -> pd.DataFra
     vcf = process_tnp(vcf)
 
     # Filter SNVs in chr1-chr22
-    vcf_filter:pd.DataFrame = vcf[(vcf['is_snp'] == True) & (vcf['CHROM'].isin(chr_list)) & (vcf['REF'] != '-') & (vcf['ALT'] != '-')]
+    vcf_filter:pd.DataFrame = vcf[(vcf['is_snp'] == True) & (vcf['CHROM'].isin(chr_list)) & (vcf['REF'] != '-') & (vcf['ALT'] != '-') & (vcf['FILTER_PASS'] == True)]
 
     return(vcf_filter.reset_index(drop=True))
 
