@@ -1,6 +1,7 @@
 #!/usr/local/bin/python3
 
 import os
+import re
 import click
 import json
 import numpy as np
@@ -132,10 +133,19 @@ class CompleteEnsemble(nn.Module):
               required=False,
               default=None,
               help="Directory with VCF files to analyze [Use --vcfFile or --vcfDir]")
+@click.option("--csvFile", "csvFile",
+              type=click.Path(exists=True, file_okay=True),
+              required=False,
+              default=None,
+              help="DeepTumour input file in csv format (as from --keep_input)")
 @click.option("--reference", "refGenome",
               type=click.Path(exists=True, file_okay=True),
               required = True,
               help="hg19 reference genome in fasta format")
+@click.option("--cap50", "cap50",
+              is_flag=True,
+              required = False,
+              help="Whether to cap the maximum number of mutations per 1Mb bin to 50 (recommended)")
 @click.option("--hg38", "hg38",
               is_flag=True,
               required = False,
@@ -156,7 +166,9 @@ class CompleteEnsemble(nn.Module):
 def DeepTumour(
     vcfFile: Optional[str],
     vcfDir: Optional[str],
+    csvFile: Optional[str],
     refGenome: str,
+    cap50: bool,
     hg38: bool,
     keep_input: bool,
     outDir: str,
@@ -169,7 +181,9 @@ def DeepTumour(
 
     # Generate the DeepTumour input file from the VCFs
     input: pd.DataFrame
-    if vcfFile and not vcfDir:
+    if csvFile:
+        input = pd.read_csv(csvFile)
+    elif vcfFile and not vcfDir:
         input = vcf2input(vcfFile, refGenome, hg38)
     elif vcfDir and not vcfFile:
         input = pd.DataFrame()
@@ -178,6 +192,13 @@ def DeepTumour(
             input = pd.concat([input, vcf2input(os.path.join(vcfDir, file), refGenome, hg38)])
     else:
         raise ValueError('Please provide either a VCF file or a directory with VCF files')
+
+    if cap50:
+        bin_cols = list(filter(
+            lambda col: re.fullmatch(r'(chr)?[0-9]+\.[0-9]+', col),
+            input.columns,
+        ))
+        input[bin_cols] = input[bin_cols].clip(upper=50)
 
     # Save the input file used by DeepTumour
     if keep_input:

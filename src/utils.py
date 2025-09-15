@@ -172,8 +172,8 @@ def df2bins(df:pd.DataFrame, sample_name:str, prefix:bool) -> pd.DataFrame:
     df_bins:pd.Series = df.CHROM + '.' + df.POS.apply(lambda x: int(math.floor(float(x) / 1000000))).astype(str)
     bins:pd.DataFrame = pd.DataFrame({'bins': pd.Series(pd.Categorical(df_bins, categories=header_bins.iloc[:, 0]))})
 
-    # Group bins and count, cap max bin count to 50
-    bins = bins.groupby('bins').size().clip(upper=50).reset_index(name=sample_name)
+    # Group bins and count
+    bins = bins.groupby('bins').size().reset_index(name=sample_name)
 
     return(bins)
 
