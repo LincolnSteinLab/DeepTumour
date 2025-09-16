@@ -238,7 +238,7 @@ def df2mut(df:pd.DataFrame, sample_name:str, fasta:Fasta) -> pd.DataFrame:
         mutations.loc[54:149, sample_name] = tri_prop
 
         ## z-norm
-        mutations[mutations.columns[1:]] = mutations.apply(lambda x: (x[1:] - z_norm[x['bins']]['mean']) / z_norm[x['bins']]['std'], axis=1)
+        #mutations[mutations.columns[1:]] = mutations.apply(lambda x: (x[1:] - z_norm[x['bins']]['mean']) / z_norm[x['bins']]['std'], axis=1)
 
     return(mutations)
 
