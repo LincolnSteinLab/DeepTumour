@@ -1,5 +1,5 @@
 # PY_VERSION should be 3.X, not 3.X.X
-ARG PY_VERSION=3.9
+ARG PY_VERSION=3.10
 
 FROM python:$PY_VERSION-slim
 
@@ -13,6 +13,7 @@ RUN groupadd -r deeptumour && \
 
 # Copy requirements & pip install
 COPY --chmod=555 requirements $HOME/requirements
+COPY --chmod=555 requirements.txt $HOME/requirements/requirements.txt
 RUN pip install --no-cache-dir -r $HOME/requirements/requirements.txt
 
 # Copy DeepTumour code & model

@@ -37,12 +37,12 @@ The DeepTumour algorithm predicts the tissue of origin of a tumour based on the 
 ### Local Environment
 
 **Requirements:**
-- Python 3.9
+- Python 3.10
 - Pip
 
 1. Install Python dependencies:
     ```sh
-    pip install -r ./requirements/requirements.txt
+    pip install -r ./requirements.txt
     ```
 
 2. Study the command options:
