@@ -193,17 +193,48 @@ def df2mut(df:pd.DataFrame, sample_name:str, fasta:Fasta) -> pd.DataFrame:
     # Extract the mutation types
     changes:list = []
     for _,row in df.iterrows():
-        chrom:str = str(row['CHROM'])
-        pos:int = int(row['POS'])
-        ref:str = row['REF']
-        alt:str = row['ALT']
-        ref_ctx:str = fasta[chrom][pos-2:pos+1].seq.upper()
+        chrom = str(row['CHROM'])
+        pos = int(row['POS'])
+        ref = str(row['REF'])
+        alt = str(row['ALT'])
 
-        # Check that we have the same reference bases
-        if (ref != ref_ctx[1]):
+        # convert 1-based VCF POS to 0-based coordinate for pyfaidx
+        pos0 = pos - 1
+        start = pos0 - 1      # want one base upstream (0-based)
+        end = pos0 + 2        # end-exclusive: pos0 + 2 will include pos0 and pos0+1 (3 total bases)
+
+        # clamp start to 0 to avoid negative slice
+        start_clamped = max(0, start)
+
+        # Try fetching sequence, with a fallback to add/remove 'chr' if necessary
+        try:
+            ref_ctx = fasta[chrom][start_clamped:end].seq.upper()
+        except KeyError:
+            # try toggling 'chr' prefix
+            alt_chrom = ('chr' + chrom) if not chrom.startswith('chr') else chrom[3:]
+            try:
+                ref_ctx = fasta[alt_chrom][start_clamped:end].seq.upper()
+                chrom = alt_chrom  # use the fasta name going forward
+            except Exception as e:
+                print(f"Skipping {chrom}:{pos} — chromosome not in FASTA ({e})", file=sys.stderr)
+                continue
+        except Exception as e:
+            print(f"Skipping {chrom}:{pos} — error fetching FASTA slice: {e}", file=sys.stderr)
+            continue
+
+        # If returned context is too short, report and skip
+        if len(ref_ctx) < 3:
+            print(
+                f"Skipping {chrom}:{pos} — context too short (got {len(ref_ctx)} bp) "
+                f"requested start={start} end={end} (clamped_start={start_clamped})",
+                file=sys.stderr
+            )
+            continue
+
+        if ref != ref_ctx[1]:
             print(
                 '-----------------------------------\n'
-                "WARNING: Reference base from VCF file doesn't match with records on the provided reference genome\n"
+                "WARNING: Reference base from VCF file doesn't match reference genome\n"
                 f'{chrom}:{pos} -- VCF: {ref} vs Reference genome: {ref_ctx[1]} -- Reference context: {ref_ctx}\n'
                 '-----------------------------------',
                 file=sys.stderr

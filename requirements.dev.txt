@@ -1,4 +1,0 @@
--r requirements/requirements.txt
-pandas-stubs==1.*
-types-click==7.1.*
-types-tqdm==4.66.*
