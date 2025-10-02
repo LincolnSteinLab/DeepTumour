@@ -19,39 +19,73 @@ def hg38tohg19(vcf:pd.DataFrame, fasta:Fasta) -> pd.DataFrame:
     Convert hg38 coordinates to hg19
     """
 
-    converter = ChainFile(REPO_ROOT / 'requirements/hg38ToHg19.over.chain.gz')
-    for i,row in vcf.iterrows():
-        chrom:str = str(row['CHROM'])
-        pos:int = int(row['POS'])
-        vcf_REF = row['REF']
-        vcf_ALT = row['ALT']
+    converter = ChainFile(REPO_ROOT / 'requirements/hg38ToHg19.over.chain.gz', one_based=True)
+    for i, row in vcf.iterrows():
+        chrom: str = str(row['CHROM'])
+        pos: int = int(row['POS'])  # 1-based position
+        vcf_REF: str = row['REF']
+        vcf_ALT: str = row['ALT']
+
+        # Only process SNPs and MNPs, discard indels
+        if len(vcf_REF) != len(vcf_ALT):
+            vcf.at[i, 'CHROM'] = 'Remove'
+            continue
         
-        try:
-            lift_chr, lift_pos, lift_strand = converter[chrom][pos][0]
-        except IndexError:
+        # Try different chromosome name formats, get matching targets
+        for chr in [chrom, chrom.replace('chr', ''), f'chr{chrom}']:
+            try:
+                targets = converter[chr][pos]
+                break
+            except IndexError:
+                continue
+        else:
+            print(
+                f'Liftover Warning: no mapping found for hg38 {chrom}:{pos}', 
+                file=sys.stderr
+            )
             vcf.at[i, 'CHROM'] = 'Remove'
             continue
 
-        if lift_strand == '-':
+        # Only keep one-to-one mappings
+        if len(targets) != 1:
+            print(
+                f'Liftover Warning: multiple mappings found for hg38 {chrom}:{pos} -> {targets}', 
+                file=sys.stderr
+            )
+            vcf.at[i, 'CHROM'] = 'Remove'
+            continue
+        
+        target_chr, target_pos, target_strand = targets[0]
+
+        if target_strand == '+':
+            target_start = target_pos
+            target_end = target_pos + len(vcf_REF) - 1
+        elif target_strand == '-':
+            target_start = target_pos - len(vcf_REF) + 1
+            target_end = target_pos
             vcf_REF = reverse_complement(vcf_REF)
             vcf_ALT = reverse_complement(vcf_ALT)
+        else:
+            print(
+                f'Liftover Warning: invalid strand for hg38 {chrom}:{pos} -> hg19 {target_chr}:{target_pos} ({target_strand})', 
+                file=sys.stderr
+            )
+            vcf.at[i, 'CHROM'] = 'Remove'
+            continue
 
-            # https://github.com/jeremymcrae/liftover/issues/1#issuecomment-676597537
-            lift_pos += 2
+        ref_context = fasta[target_chr][target_start-2:target_end+1].seq.upper()  # uses 0-based
 
-        ref_context = fasta[lift_chr][lift_pos-2:lift_pos+1].seq.upper()
-
-        if (len(vcf_REF) == len(vcf_ALT) and vcf_REF != ref_context[1]):
+        if vcf_REF != ref_context[1:-1]:
             print((
-                f'Liftover Warning: ref mismatch at hg38 {chrom}:{pos} -> hg19 {lift_chr}:{lift_pos} '
-                f'-- VCF REF: {vcf_REF} (ALT: {vcf_ALT}) vs Reference hg19: {ref_context[1]} '
+                f'Liftover Warning: ref mismatch at hg38 {chrom}:{pos} -> hg19 {target_chr}:{target_start}-{target_end} '
+                f'-- VCF REF: {vcf_REF} (ALT: {vcf_ALT}) vs Reference hg19: {ref_context[1:-1]} '
                 f'-- Reference context: {ref_context}'
             ), file=sys.stderr)
             vcf.at[i, 'CHROM'] = 'Remove'
             continue
 
-        vcf.at[i, 'CHROM'] = lift_chr
-        vcf.at[i, 'POS'] = lift_pos
+        vcf.at[i, 'CHROM'] = target_chr
+        vcf.at[i, 'POS'] = target_start
         vcf.at[i, 'REF'] = vcf_REF
         vcf.at[i, 'ALT'] = vcf_ALT
 
