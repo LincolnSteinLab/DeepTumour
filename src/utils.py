@@ -40,18 +40,21 @@ def hg38tohg19(vcf:pd.DataFrame, fasta:Fasta) -> pd.DataFrame:
                 continue
         else:
             print(
-                f'Liftover Warning: no mapping found for hg38 {chrom}:{pos}', 
+                f'Liftover Warning: no mapping for hg38 {chrom}:{pos}', 
                 file=sys.stderr
             )
             vcf.at[i, 'CHROM'] = 'Remove'
             continue
 
         # Only keep one-to-one mappings
-        if len(targets) != 1:
+        if len(targets) > 1:
             print(
-                f'Liftover Warning: multiple mappings found for hg38 {chrom}:{pos} -> {targets}', 
+                f'Liftover Warning: multiple mappings for hg38 {chrom}:{pos} -> {targets}', 
                 file=sys.stderr
             )
+            vcf.at[i, 'CHROM'] = 'Remove'
+            continue
+        elif len(targets) == 0:  # No mappings
             vcf.at[i, 'CHROM'] = 'Remove'
             continue
         
