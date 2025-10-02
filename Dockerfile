@@ -1,5 +1,5 @@
 # PY_VERSION should be 3.X, not 3.X.X
-ARG PY_VERSION=3.10
+ARG PY_VERSION=3.9
 
 FROM python:$PY_VERSION-slim
 
