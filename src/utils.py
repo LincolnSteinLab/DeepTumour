@@ -188,7 +188,14 @@ def vcf2df(vcf_path:str, prefix:bool, liftOver:bool, fasta: Fasta) -> pd.DataFra
     vcf = process_tnp(vcf)
 
     # Filter SNVs in chr1-chr22
-    vcf_filter:pd.DataFrame = vcf[(vcf['is_snp'] == True) & (vcf['CHROM'].isin(chr_list)) & (vcf['REF'] != '-') & (vcf['ALT'] != '-') & (vcf['FILTER_PASS'] == True)]
+    if 'FILTER_PASS' in vcf.columns:
+        pass_filter = vcf['FILTER_PASS'] == True
+    elif 'FILTER' in vcf.columns:
+        pass_filter = vcf['FILTER'] == 'PASS'
+    else:
+        pass_filter = True  # No filter column, keep all
+
+    vcf_filter:pd.DataFrame = vcf[(vcf['is_snp'] == True) & (vcf['CHROM'].isin(chr_list)) & (vcf['REF'] != '-') & (vcf['ALT'] != '-') & pass_filter]
 
     return(vcf_filter.reset_index(drop=True))
 
