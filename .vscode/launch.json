@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DeepTumour",
+      "type": "debugpy",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}",
+      "program": "/workspace/src/DeepTumour.py",
+      "args": [
+        "--vcfFile", "/workspace/test/Breast-AdenoCa_sim1.vcf",
+        "--reference", "/reference/hs37d5.fa",
+        "--outDir", "/workspace/test/"
+      ],
+      "python": "/usr/local/bin/python3.9"
+    }
+  ]
+}

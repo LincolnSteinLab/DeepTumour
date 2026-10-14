@@ -1,0 +1,27 @@
+{
+    "name": "deeptumour-debug",
+    "image": "deeptumour:v3.0.6",
+
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace", // VSCode workspace folder inside the container
+    
+    "mounts": [
+        // # REVIEW - Update to your hg19 path
+        "source=/databases/hg19,target=/reference,type=bind" 
+    ],
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python3.9",
+                "extensions.verifySignature": false
+            }
+        }
+    },
+
+    // Optional: if you need to run things as root or a specific user
+    "remoteUser": "root"
+}

@@ -149,6 +149,11 @@ class CompleteEnsemble(nn.Module):
               default=os.getcwd(),
               show_default=False,
               help="Directory where save DeepTumour results. Default is the current directory")
+@click.option("--outName", "outName",
+              type=click.Path(),
+              default='predictions_DeepTumour.json',
+              show_default=False,
+              help="Name for the output JSON file")
 @click.option("--stdout", "stdout",
               is_flag=True,
               required = False,
@@ -160,6 +165,7 @@ def DeepTumour(
     hg38: bool,
     keep_input: bool,
     outDir: str,
+    outName: str,
     stdout: bool,
 ):
 
@@ -215,7 +221,7 @@ def DeepTumour(
         print(json.dumps(result, indent=4, sort_keys=True))
     else:
         # Save the results
-        with open(os.path.join(outDir, 'predictions_DeepTumour.json'), 'w') as file:
+        with open(os.path.join(outDir, outName), 'w') as file:
             json.dump(result, file, indent=4, sort_keys=True)
 
 if __name__ == '__main__':
