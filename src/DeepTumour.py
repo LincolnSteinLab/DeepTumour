@@ -158,6 +158,15 @@ class CompleteEnsemble(nn.Module):
               is_flag=True,
               required = False,
               help="Use this tag to print the results to stdout instead of saving them to a file")
+@click.option("--plot", "plot",
+              is_flag=True,
+              required = False,
+              help="Use this tag to also save a bar plot of the probabilities of each sample in outDir")
+@click.option("--sampleID", "sampleID",
+              type=str,
+              required = False,
+              default=None,
+              help="Sample name to use in the plot title and file name instead of the VCF name")
 def DeepTumour(
     vcfFile: Optional[str],
     vcfDir: Optional[str],
@@ -167,11 +176,19 @@ def DeepTumour(
     outDir: str,
     outName: str,
     stdout: bool,
+    plot: bool,
+    sampleID: Optional[str],
 ):
 
     """
     Predict cancer type from a VCF file using DeepTumour
     """
+
+    # Check --sampleID before the VCF processing
+    if sampleID is not None and not plot:
+        raise click.UsageError("--sampleID is only used for plots, please also add --plot")
+    if sampleID is not None and vcfDir:
+        raise click.UsageError("--sampleID can only be used with --vcfFile (a single sample)")
 
     # Generate the DeepTumour input file from the VCFs
     input: pd.DataFrame
@@ -223,6 +240,14 @@ def DeepTumour(
         # Save the results
         with open(os.path.join(outDir, outName), 'w') as file:
             json.dump(result, file, indent=4, sort_keys=True)
+
+    # Plot the probabilities of each sample
+    if plot:
+        # matplotlib is only loaded when plots are requested
+        from plot_deeptumour import plot_all
+        for path in plot_all(result, outDir, sampleID):
+            # stderr, so it doesn't mix with the JSON printed by --stdout
+            click.echo(f"Plot saved to: {path}", err=True)
 
 if __name__ == '__main__':
     DeepTumour()
