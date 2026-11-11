@@ -5,6 +5,8 @@ FROM python:$PY_VERSION-slim
 
 ENV HOME="/DEEPTUMOUR"
 ENV PATH="$HOME/src:$PATH"
+# Writable matplotlib cache for the non-root user (used by --plot)
+ENV MPLCONFIGDIR="/tmp/matplotlib"
 
 # Create non-root user
 RUN groupadd -r deeptumour && \

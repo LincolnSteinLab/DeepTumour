@@ -56,6 +56,22 @@ The DeepTumour algorithm predicts the tissue of origin of a tumour based on the 
     ```
 
 
+### Plotting the predictions
+
+Add `--plot` to any of the commands above to also save a bar plot of the predicted probabilities for each sample, as `<outDir>/<sample>_DeepTumour.png`. The top prediction is highlighted and the entropy is shown. Plots are written to `--outDir` even when `--stdout` is used.
+
+By default the plot uses the sample name taken from the VCF file name. To use your own sample ID in the plot title and file name, add `--sampleID [SAMPLE_ID]`. The predictions JSON keeps the VCF-based name.
+
+To plot an existing predictions JSON without re-running DeepTumour:
+```sh
+# Docker
+docker run --rm -v .:/WORKDIR --entrypoint plot_deeptumour.py ghcr.io/lincolnsteinlab/deeptumour:latest [PREDICTIONS_JSON] --outDir [OUT_DIR]
+
+# Local environment
+python src/plot_deeptumour.py [PREDICTIONS_JSON] --outDir [OUT_DIR] [--sampleID SAMPLE_ID]
+```
+
+
 ## Appendix
 
 ### [About the DeepTumour Algorithm](/docs/about.md)
